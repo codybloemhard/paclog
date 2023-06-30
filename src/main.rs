@@ -117,8 +117,10 @@ fn parse_dt(s: &str) -> Result<(u16, u8, u8, u8), ParseIntError>{
     let month: u8 = s[6..8].parse()?;
     let day: u8 = s[9..11].parse()?;
     let hour: u8 = s[12..14].parse()?;
-    let offset: u8 = s[21..23].parse()?;
-    Ok((year, month, day, (hour + offset) % 24))
+    // [2023-06-30T02:12:34+0200] [ALPM] transaction completed
+    // actually did run at around 2:12?
+    // let offset: u8 = s[21..23].parse()?;
+    Ok((year, month, day, hour))
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
