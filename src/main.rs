@@ -1,8 +1,11 @@
-use std::fs::File;
-use std::io::{ self, BufRead };
-use std::path::Path;
-use std::collections::HashMap;
-use std::num::ParseIntError;
+use std::{
+    fs::File,
+    io::{ self, BufRead },
+    path::Path,
+    collections::HashMap,
+    num::ParseIntError,
+    hash::Hash,
+};
 
 type DT = (u16, u8, u8, u8); // date time (y, m, d, h)
 enum Event{
@@ -50,8 +53,8 @@ fn parse(lines: io::Lines<io::BufReader<File>>) -> Vec<Event>{
 }
 
 fn run(events: Vec<Event>){
-    let mut command_map = HashMap::new();
-    let mut update_map = HashMap::new();
+    let mut command_map = FreqMap::new();
+    let mut update_map = FreqMap::new();
 
     let nevents = events.len();
     let mut ncommands = 0usize;
@@ -64,8 +67,7 @@ fn run(events: Vec<Event>){
     for event in events{
         match event{
             Event::Command(_, com) => {
-                let freq = if let Some(freq) = command_map.get(&com){ freq + 1 } else { 1 };
-                command_map.insert(com, freq);
+                command_map.inc(com);
                 ncommands += 1;
                 last_command_update = false;
             },
@@ -81,8 +83,7 @@ fn run(events: Vec<Event>){
                     last_command_update = true;
                     updates += 1;
                 }
-                let freq = if let Some(freq) = update_map.get(&prog){ freq + 1 } else { 1 };
-                update_map.insert(prog, freq);
+                update_map.inc(prog);
             },
             Event::Downgraded(_, _, _) => {
                 downgrades += 1;
@@ -98,17 +99,34 @@ fn run(events: Vec<Event>){
     println!("Update: {}", updates);
 
     println!();
-    let mut command_map = command_map.into_iter().collect::<Vec<_>>();
-    command_map.sort_unstable_by(|(_, f0), (_, f1)| f1.partial_cmp(f0).unwrap());
+    let command_map = command_map.into_sorted();
     for (command, freq) in command_map.into_iter().take(10){
         println!("{}: {} times", command, freq);
     }
 
     println!();
-    let mut update_map = update_map.into_iter().collect::<Vec<_>>();
-    update_map.sort_unstable_by(|(_, f0), (_, f1)| f1.partial_cmp(f0).unwrap());
+    let update_map = update_map.into_sorted();
     for (prog, freq) in update_map.into_iter().take(10){
         println!("{}: {} times", prog, freq);
+    }
+}
+
+struct FreqMap<T>(pub HashMap<T, usize>);
+
+impl<T: PartialEq + Eq + Hash> FreqMap<T>{
+    pub fn new() -> Self{
+        Self(HashMap::new())
+    }
+
+    pub fn inc(&mut self, key: T){
+        let freq = if let Some(freq) = self.0.get(&key){ freq + 1 } else { 1 };
+        self.0.insert(key, freq);
+    }
+
+    pub fn into_sorted(self) -> Vec<(T, usize)>{
+        let mut vec = self.0.into_iter().collect::<Vec<_>>();
+        vec.sort_unstable_by(|(_, f0), (_, f1)| f1.partial_cmp(f0).unwrap());
+        vec
     }
 }
 
