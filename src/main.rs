@@ -5,13 +5,14 @@ use std::{
     collections::HashMap,
     num::ParseIntError,
     hash::Hash,
+    fmt::Display,
 };
 
 type DT = (u16, u8, u8, u8); // date time (y, m, d, h)
 enum Event{
     Command(DT, String), // dt, command
-    Removed(DT, String, String), // dt, package, version
     Installed(DT, String, String), // dt, package, version
+    Removed(DT, String, String), // dt, package, version
     Upgraded(DT, String, String), // dt, package, version
     Downgraded(DT, String, String), // dt, package, version
 }
@@ -34,13 +35,14 @@ fn parse(lines: io::Lines<io::BufReader<File>>) -> Vec<Event>{
         if parts[1] == "[PACMAN]" && parts[2] == "Running"{
             let command = parts[3..].join(" ");
             res.push(Event::Command(dt, command));
-        } else if parts[1] == "[ALPM]" && parts[2] == "removed"{
-            let version = parts[4..].join(" ");
-            res.push(Event::Removed(dt, parts[3].to_string(), version));
         } else if parts[1] == "[ALPM]" && parts[2] == "installed"{
             let version = parts[4..].join(" ");
             res.push(Event::Installed(dt, parts[3].to_string(), version));
-        } else if parts[1] == "[ALPM]" && parts[2] == "upgraded"{
+        } else if parts[1] == "[ALPM]" && parts[2] == "removed"{
+            let version = parts[4..].join(" ");
+            res.push(Event::Removed(dt, parts[3].to_string(), version));
+        }
+        else if parts[1] == "[ALPM]" && parts[2] == "upgraded"{
             let version = parts[4..].join(" ");
             res.push(Event::Upgraded(dt, parts[3].to_string(), version));
         } else if parts[1] == "[ALPM]" && parts[2] == "downgraded"{
@@ -53,80 +55,90 @@ fn parse(lines: io::Lines<io::BufReader<File>>) -> Vec<Event>{
 }
 
 fn run(events: Vec<Event>){
-    let mut command_map = FreqMap::new();
-    let mut update_map = FreqMap::new();
-
     let nevents = events.len();
-    let mut ncommands = 0usize;
     let mut packages = 0usize;
-    let mut upgrades = 0usize;
-    let mut downgrades = 0usize;
     let mut updates = 0usize;
     let mut last_command_update = false;
+
+    let mut command_map = FreqMap::new();
+    let mut install_map = FreqMap::new();
+    let mut remove_map = FreqMap::new();
+    let mut upgrade_map = FreqMap::new();
+    let mut downgrade_map = FreqMap::new();
 
     for event in events{
         match event{
             Event::Command(_, com) => {
                 command_map.inc(com);
-                ncommands += 1;
                 last_command_update = false;
             },
-            Event::Removed(_, _, _) => {
-                packages -= 1;
-            },
-            Event::Installed(_, _, _) => {
+            Event::Installed(_, prog, _) => {
                 packages += 1;
+                install_map.inc(prog);
+            },
+            Event::Removed(_, prog, _) => {
+                packages -= 1;
+                remove_map.inc(prog);
             },
             Event::Upgraded(_, prog, _) => {
-                upgrades += 1;
                 if !last_command_update{
                     last_command_update = true;
                     updates += 1;
                 }
-                update_map.inc(prog);
+                upgrade_map.inc(prog);
             },
-            Event::Downgraded(_, _, _) => {
-                downgrades += 1;
+            Event::Downgraded(_, prog, _) => {
+                downgrade_map.inc(prog);
             },
         }
     }
 
     println!("Events: {}", nevents);
-    println!("Commands: {}", ncommands);
     println!("Packages: {}", packages);
-    println!("Upgrades: {}", upgrades);
-    println!("Downgrades: {}", downgrades);
-    println!("Update: {}", updates);
+    println!("Updates: {}", updates);
 
-    println!();
-    let command_map = command_map.into_sorted();
-    for (command, freq) in command_map.into_iter().take(10){
-        println!("{}: {} times", command, freq);
-    }
+    print_map(command_map, "Commands:", 10);
+    print_map(install_map, "Installs:", 10);
+    print_map(remove_map, "Removes:", 10);
+    print_map(upgrade_map, "Upgrades:", 10);
+    print_map(downgrade_map, "Downgrades:", 10);
+}
 
-    println!();
-    let update_map = update_map.into_sorted();
-    for (prog, freq) in update_map.into_iter().take(10){
-        println!("{}: {} times", prog, freq);
+fn print_map<T: Display + PartialEq + Eq + Hash>(map: FreqMap<T>, msg: &str, n: usize){
+    println!("{} {}", msg, map.get_total());
+    let vec = map.into_sorted();
+    for (to_display, freq) in vec.into_iter().take(n){
+        println!("\t{}: {} times", to_display, freq);
     }
 }
 
-struct FreqMap<T>(pub HashMap<T, usize>);
+struct FreqMap<T>{
+    map: HashMap<T, usize>,
+    total: usize,
+}
 
 impl<T: PartialEq + Eq + Hash> FreqMap<T>{
     pub fn new() -> Self{
-        Self(HashMap::new())
+        Self{
+            map: HashMap::new(),
+            total: 0,
+        }
     }
 
     pub fn inc(&mut self, key: T){
-        let freq = if let Some(freq) = self.0.get(&key){ freq + 1 } else { 1 };
-        self.0.insert(key, freq);
+        let freq = if let Some(freq) = self.map.get(&key){ freq + 1 } else { 1 };
+        self.map.insert(key, freq);
+        self.total += 1;
     }
 
     pub fn into_sorted(self) -> Vec<(T, usize)>{
-        let mut vec = self.0.into_iter().collect::<Vec<_>>();
+        let mut vec = self.map.into_iter().collect::<Vec<_>>();
         vec.sort_unstable_by(|(_, f0), (_, f1)| f1.partial_cmp(f0).unwrap());
         vec
+    }
+
+    pub fn get_total(&self) -> usize{
+        self.total
     }
 }
 
