@@ -65,11 +65,19 @@ fn run(events: Vec<Event>){
     let mut remove_map = FreqMap::new();
     let mut upgrade_map = FreqMap::new();
     let mut downgrade_map = FreqMap::new();
+    let mut y_map = FreqMap::new();
+    let mut m_map = FreqMap::new();
+    let mut d_map = FreqMap::new();
+    let mut h_map = FreqMap::new();
 
     for event in events{
         match event{
-            Event::Command(_, com) => {
+            Event::Command((y, m, d, h), com) => {
                 command_map.inc(com);
+                y_map.inc(y);
+                m_map.inc(m);
+                d_map.inc(d);
+                h_map.inc(h);
                 last_command_update = false;
             },
             Event::Installed(_, prog, _) => {
@@ -97,16 +105,26 @@ fn run(events: Vec<Event>){
     println!("Packages: {}", packages);
     println!("Updates: {}", updates);
 
-    print_map(command_map, "Commands:", 10);
-    print_map(install_map, "Installs:", 10);
-    print_map(remove_map, "Removes:", 10);
-    print_map(upgrade_map, "Upgrades:", 10);
-    print_map(downgrade_map, "Downgrades:", 10);
+    print_map(command_map, "Commands:", 10, true);
+    print_map(install_map, "Installs:", 10, true);
+    print_map(remove_map, "Removes:", 10, true);
+    print_map(upgrade_map, "Upgrades:", 10, true);
+    print_map(downgrade_map, "Downgrades:", 10, true);
+    print_map(y_map, "Commands (Year):", 10, false);
+    print_map(m_map, "Commands (Month):", 12, false);
+    print_map(d_map, "Commands (Day):", 31, false);
+    print_map(h_map, "Commands (Hour):", 24, false);
 }
 
-fn print_map<T: Display + PartialEq + Eq + Hash>(map: FreqMap<T>, msg: &str, n: usize){
+fn print_map<T: Display + PartialEq + Eq + PartialOrd + Hash>(
+    map: FreqMap<T>, msg: &str, n: usize, sort_by_freq: bool
+){
     println!("{} {}", msg, map.get_total());
-    let vec = map.into_sorted();
+    let vec = if sort_by_freq {
+        map.sorted_by_freq()
+    } else {
+        map.sorted_by_key()
+    };
     for (to_display, freq) in vec.into_iter().take(n){
         println!("\t{}: {} times", to_display, freq);
     }
@@ -131,7 +149,7 @@ impl<T: PartialEq + Eq + Hash> FreqMap<T>{
         self.total += 1;
     }
 
-    pub fn into_sorted(self) -> Vec<(T, usize)>{
+    pub fn sorted_by_freq(self) -> Vec<(T, usize)>{
         let mut vec = self.map.into_iter().collect::<Vec<_>>();
         vec.sort_unstable_by(|(_, f0), (_, f1)| f1.partial_cmp(f0).unwrap());
         vec
@@ -139,6 +157,14 @@ impl<T: PartialEq + Eq + Hash> FreqMap<T>{
 
     pub fn get_total(&self) -> usize{
         self.total
+    }
+}
+
+impl<T: PartialOrd> FreqMap<T>{
+    pub fn sorted_by_key(self) -> Vec<(T, usize)>{
+        let mut vec = self.map.into_iter().collect::<Vec<_>>();
+        vec.sort_unstable_by(|(k0, _), (k1, _)| k0.partial_cmp(k1).unwrap());
+        vec
     }
 }
 
