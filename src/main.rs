@@ -75,9 +75,9 @@ fn run(events: Vec<Event>){
             Event::Command((y, m, d, h), com) => {
                 command_map.inc(com);
                 y_map.inc(y);
-                m_map.inc(m);
-                d_map.inc(d);
-                h_map.inc(h);
+                m_map.inc(m as u16);
+                d_map.inc(d as u16);
+                h_map.inc(h as u16);
                 last_command_update = false;
             },
             Event::Installed(_, prog, _) => {
@@ -110,10 +110,11 @@ fn run(events: Vec<Event>){
     print_map(remove_map, "Removes:", 10, true);
     print_map(upgrade_map, "Upgrades:", 10, true);
     print_map(downgrade_map, "Downgrades:", 10, true);
-    print_map(y_map, "Commands (Year):", 10, false);
-    print_map(m_map, "Commands (Month):", 12, false);
-    print_map(d_map, "Commands (Day):", 31, false);
-    print_map(h_map, "Commands (Hour):", 24, false);
+    print_bargraph(into_graphdata(h_map), 32, 4);
+    // print_map(y_map, "Commands (Year):", 10, false);
+    // print_map(m_map, "Commands (Month):", 12, false);
+    // print_map(d_map, "Commands (Day):", 31, false);
+    // print_map(h_map, "Commands (Hour):", 24, false);
 }
 
 fn print_map<T: Display + PartialEq + Eq + PartialOrd + Hash>(
@@ -127,6 +128,39 @@ fn print_map<T: Display + PartialEq + Eq + PartialOrd + Hash>(
     };
     for (to_display, freq) in vec.into_iter().take(n){
         println!("\t{}: {} times", to_display, freq);
+    }
+}
+
+fn into_graphdata(map: FreqMap<u16>) -> Vec<(u16, usize)>{
+    // fill holes
+    let mut filled = Vec::new();
+    let mut prev = 0;
+    for (k, f) in map.sorted_by_key().into_iter(){
+        while k > prev + 1{
+            filled.push((prev + 1, 0));
+            prev += 1;
+        }
+        filled.push((k, f));
+        prev = k;
+    }
+    filled
+}
+
+fn print_bargraph(data: Vec<(u16, usize)>, h: usize, bw: usize){
+    let max = *data.iter().map(|(_, f)| f).max().unwrap();
+    for i in 0..h{
+        let j = h - i;
+        for (_, f) in &data{
+            let c = if *f as f32 / max as f32 >= j as f32 / h as f32{
+                "x"
+            } else {
+                " "
+            };
+            for _ in 0..bw{
+                print!("{}", c);
+            }
+        }
+        println!();
     }
 }
 
