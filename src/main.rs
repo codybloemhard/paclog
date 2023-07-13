@@ -8,6 +8,79 @@ use std::{
     fmt::Display,
 };
 
+
+use clap::{
+    Parser,
+    Subcommand,
+};
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args{
+    #[clap(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands{
+    Test,
+    Counts,
+    Commands{
+        #[clap(short, default_value_t = 10, help = "Amount of commands to show.")]
+        n: usize,
+    },
+    Installs{
+        #[clap(short, default_value_t = 10, help = "Amount of packages to show.")]
+        n: usize,
+    },
+    Removes{
+        #[clap(short, default_value_t = 10, help = "Amount of packages to show.")]
+        n: usize,
+    },
+    Upgrades{
+        #[clap(short, default_value_t = 10, help = "Amount of packages to show.")]
+        n: usize,
+    },
+    Downgrades{
+        #[clap(short, default_value_t = 10, help = "Amount of packages to show.")]
+        n: usize,
+    },
+}
+
+fn main() {
+    let args = Args::parse();
+    let lines = if let Ok(lines) = read_lines("/var/log/pacman.log") {
+        lines
+    } else {
+        panic!("Error: could not read '/var/log/pacman.log'!");
+    };
+    let parsed = parse(lines);
+
+    match args.command{
+        Commands::Test => {
+            run(parsed);
+        },
+        Commands::Counts => {
+            counts(parsed);
+        },
+        Commands::Commands{ n } => {
+            top_commands(parsed, n);
+        },
+        Commands::Installs{ n } => {
+            top_installs(parsed, n);
+        },
+        Commands::Removes{ n } => {
+            top_removes(parsed, n);
+        },
+        Commands::Upgrades{ n } => {
+            top_upgrades(parsed, n);
+        },
+        Commands::Downgrades{ n } => {
+            top_downgrades(parsed, n);
+        },
+    }
+}
+
 type DT = (u16, u8, u8, u8); // date time (y, m, d, h)
 enum Event{
     Command(DT, String), // dt, command
@@ -16,12 +89,7 @@ enum Event{
     Upgraded(DT, String, String), // dt, package, version
     Downgraded(DT, String, String), // dt, package, version
 }
-
-fn main() {
-    if let Ok(lines) = read_lines("/var/log/pacman.log") {
-        run(parse(lines));
-    }
-}
+type Events = Vec<Event>;
 
 fn parse(lines: io::Lines<io::BufReader<File>>) -> Vec<Event>{
     let mut res = Vec::new();
@@ -54,49 +122,40 @@ fn parse(lines: io::Lines<io::BufReader<File>>) -> Vec<Event>{
     res
 }
 
-fn run(events: Vec<Event>){
+fn counts(events: Events){
     let nevents = events.len();
     let mut packages = 0usize;
+    let mut commands = 0usize;
     let mut updates = 0usize;
+    let mut installs = 0usize;
+    let mut removes = 0usize;
+    let mut upgrades = 0usize;
+    let mut downgrades = 0usize;
     let mut last_command_update = false;
-
-    let mut command_map = FreqMap::new();
-    let mut install_map = FreqMap::new();
-    let mut remove_map = FreqMap::new();
-    let mut upgrade_map = FreqMap::new();
-    let mut downgrade_map = FreqMap::new();
-    let mut y_map = FreqMap::new();
-    let mut m_map = FreqMap::new();
-    let mut d_map = FreqMap::new();
-    let mut h_map = FreqMap::new();
 
     for event in events{
         match event{
-            Event::Command((y, m, d, h), com) => {
-                command_map.inc(com);
-                y_map.inc(y);
-                m_map.inc(m as u16);
-                d_map.inc(d as u16);
-                h_map.inc(h as u16);
+            Event::Command(_, _) => {
                 last_command_update = false;
+                commands += 1;
             },
-            Event::Installed(_, prog, _) => {
+            Event::Installed(_, _, _) => {
                 packages += 1;
-                install_map.inc(prog);
+                installs += 1;
             },
-            Event::Removed(_, prog, _) => {
+            Event::Removed(_, _, _) => {
                 packages -= 1;
-                remove_map.inc(prog);
+                removes += 1;
             },
-            Event::Upgraded(_, prog, _) => {
+            Event::Upgraded(_, _, _) => {
                 if !last_command_update{
                     last_command_update = true;
                     updates += 1;
                 }
-                upgrade_map.inc(prog);
+                upgrades += 1;
             },
-            Event::Downgraded(_, prog, _) => {
-                downgrade_map.inc(prog);
+            Event::Downgraded(_, _, _) => {
+                downgrades += 1;
             },
         }
     }
@@ -104,12 +163,86 @@ fn run(events: Vec<Event>){
     println!("Events: {}", nevents);
     println!("Packages: {}", packages);
     println!("Updates: {}", updates);
+    println!("Commands: {}", commands);
+    println!("Installs: {}", installs);
+    println!("Removes: {}", removes);
+    println!("Upgrades: {}", upgrades);
+    println!("Downgrades: {}", downgrades);
+}
 
-    print_map(command_map, "Commands:", 10, true);
-    print_map(install_map, "Installs:", 10, true);
-    print_map(remove_map, "Removes:", 10, true);
-    print_map(upgrade_map, "Upgrades:", 10, true);
-    print_map(downgrade_map, "Downgrades:", 10, true);
+fn top_commands(events: Events, n: usize){
+    let mut command_map = FreqMap::new();
+    for event in events{
+        if let Event::Command(_, com) = event {
+            command_map.inc(com);
+        }
+    }
+
+    print_map(command_map, "Commands:", n, true);
+}
+
+fn top_installs(events: Events, n: usize){
+    let mut install_map = FreqMap::new();
+    for event in events{
+        if let Event::Installed(_, prog, _) = event {
+            install_map.inc(prog);
+        }
+    }
+
+    print_map(install_map, "Installs:", n, true);
+}
+
+fn top_removes(events: Events, n: usize){
+    let mut remove_map = FreqMap::new();
+    for event in events{
+        if let Event::Removed(_, prog, _) = event {
+            remove_map.inc(prog);
+        }
+    }
+
+    print_map(remove_map, "Removes:", n, true);
+}
+
+fn top_upgrades(events: Events, n: usize){
+    let mut upgrade_map = FreqMap::new();
+    for event in events{
+        if let Event::Upgraded(_, prog, _) = event{
+            upgrade_map.inc(prog);
+        }
+    }
+
+    print_map(upgrade_map, "Upgrades:", n, true);
+}
+
+fn top_downgrades(events: Events, n: usize){
+    let mut downgrade_map = FreqMap::new();
+    for event in events{
+        if let Event::Downgraded(_, prog, _) = event{
+            downgrade_map.inc(prog);
+        }
+    }
+
+    print_map(downgrade_map, "Downgrades:", n, true);
+}
+
+fn run(events: Events){
+    let mut y_map = FreqMap::new();
+    let mut m_map = FreqMap::new();
+    let mut d_map = FreqMap::new();
+    let mut h_map = FreqMap::new();
+
+    for event in events{
+        if let Event::Command((y, m, d, h), _) = event {
+            y_map.inc(y);
+            m_map.inc(m as u16);
+            d_map.inc(d as u16);
+            h_map.inc(h as u16);
+        }
+    }
+
+    // print_bargraph(into_graphdata(y_map), 32, 4);
+    print_bargraph(into_graphdata(m_map), 32, 5);
+    print_bargraph(into_graphdata(d_map), 32, 3);
     print_bargraph(into_graphdata(h_map), 32, 4);
     // print_map(y_map, "Commands (Year):", 10, false);
     // print_map(m_map, "Commands (Month):", 12, false);
