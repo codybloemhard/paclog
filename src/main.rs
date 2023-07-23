@@ -45,6 +45,9 @@ enum Commands{
         #[clap(short, default_value_t = 10, help = "Amount of packages to show.")]
         n: usize,
     },
+    Package{
+        package: String,
+    },
 }
 
 fn main() {
@@ -77,6 +80,9 @@ fn main() {
         },
         Commands::Downgrades{ n } => {
             top_downgrades(parsed, n);
+        },
+        Commands::Package{ package } => {
+            package_history(parsed, package);
         },
     }
 }
@@ -225,6 +231,35 @@ fn top_downgrades(events: Events, n: usize){
     print_map(downgrade_map, "Downgrades:", n, true);
 }
 
+
+fn package_history(events: Events, target_package: String){
+    let mut last_command = String::new();
+    for event in events{
+        match event{
+            // date time (y, m, d, h)
+            Event::Command(dt, command) => {
+                last_command = command;
+            },
+            Event::Installed(dt, package, version) => {
+                if target_package != package { continue; }
+                println!("{} - Installed with: {}", format_dt(dt), last_command);
+            },
+            Event::Removed(dt, package, version) => {
+                if target_package != package { continue; }
+                println!("{} - Removed with: {}", format_dt(dt), last_command);
+            },
+            Event::Upgraded(dt, package, version) => {
+                if target_package != package { continue; }
+                println!("{} - Upgraded with: {}", format_dt(dt), last_command);
+            },
+            Event::Downgraded(dt, package, version) => {
+                if target_package != package { continue; }
+                println!("{} - Downgraded with: {}", format_dt(dt), last_command);
+            },
+        }
+    }
+}
+
 fn run(events: Events){
     let mut y_map = FreqMap::new();
     let mut m_map = FreqMap::new();
@@ -344,6 +379,10 @@ fn parse_dt(s: &str) -> Result<(u16, u8, u8, u8), ParseIntError>{
     // actually did run at around 2:12?
     // let offset: u8 = s[21..23].parse()?;
     Ok((year, month, day, hour))
+}
+
+fn format_dt((y, m, d, h): DT) -> String {
+    format!("{}/{:0>2}/{:0>2} {:0>2}:00", y, m, d, h)
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
