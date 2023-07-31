@@ -48,6 +48,8 @@ enum Commands{
     },
     Package{
         package: String,
+        #[clap(long, help = "Show command used to do upgrades.")]
+        upgrade_command: bool,
     },
 }
 
@@ -82,8 +84,8 @@ fn main() {
         Commands::Downgrades{ n } => {
             top_downgrades(parsed, n);
         },
-        Commands::Package{ package } => {
-            package_history(parsed, package);
+        Commands::Package{ package, upgrade_command } => {
+            package_history(parsed, package, upgrade_command);
         },
     }
 }
@@ -233,7 +235,7 @@ fn top_downgrades(events: Events, n: usize){
 }
 
 
-fn package_history(events: Events, target_package: String){
+fn package_history(events: Events, target_package: String, upgrade_command: bool){
     let mut last_command = String::new();
     for event in events{
         match event{
@@ -262,12 +264,17 @@ fn package_history(events: Events, target_package: String){
             Event::Upgraded(dt, package, version) => {
                 if target_package != package { continue; }
                 println!(
-                    "{} - {}Upgraded{} {}from{} version{} to{} {}{}{}{}{} with: {}{}{}{}",
+                    "{} - {}Upgraded{} {}from{} version{} to{} {}{}{}{}{}",
                     format_dt(dt), GREEN, RESET,
                     FAINT, RESET, FAINT, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
-                    ITALIC, MAGENTA, last_command, RESET
                 );
+                if upgrade_command {
+                    println!(
+                        " with: {}{}{}{}",
+                        ITALIC, MAGENTA, last_command, RESET
+                    );
+                }
             },
             Event::Downgraded(dt, package, version) => {
                 if target_package != package { continue; }
