@@ -11,3 +11,4 @@ description = "A tool to query the pacman log file."
 
 [dependencies]
 clap = { version = "4.3.11", features = ["derive"] }
+zen-colour = "1.0.0"

@@ -8,11 +8,12 @@ use std::{
     fmt::Display,
 };
 
-
 use clap::{
     Parser,
     Subcommand,
 };
+
+use zen_colour::*;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -166,14 +167,14 @@ fn counts(events: Events){
         }
     }
 
-    println!("Events: {}", nevents);
-    println!("Packages: {}", packages);
-    println!("Updates: {}", updates);
-    println!("Commands: {}", commands);
-    println!("Installs: {}", installs);
-    println!("Removes: {}", removes);
-    println!("Upgrades: {}", upgrades);
-    println!("Downgrades: {}", downgrades);
+    println!("Events: {}{}{}", RED, nevents, RESET);
+    println!("Packages: {}{}{}", RED, packages, RESET);
+    println!("Updates: {}{}{}", RED, updates, RESET);
+    println!("Commands: {}{}{}", RED, commands, RESET);
+    println!("Installs: {}{}{}", RED, installs, RESET);
+    println!("Removes: {}{}{}", RED, removes, RESET);
+    println!("Upgrades: {}{}{}", RED, upgrades, RESET);
+    println!("Downgrades: {}{}{}", RED, downgrades, RESET);
 }
 
 fn top_commands(events: Events, n: usize){
@@ -237,24 +238,46 @@ fn package_history(events: Events, target_package: String){
     for event in events{
         match event{
             // date time (y, m, d, h)
-            Event::Command(dt, command) => {
+            Event::Command(_, command) => {
                 last_command = command;
             },
             Event::Installed(dt, package, version) => {
                 if target_package != package { continue; }
-                println!("{} - Installed with: {}", format_dt(dt), last_command);
+                println!(
+                    "{} - {}{}Installed{} version {}{}{}{}{} with: {}{}{}{}",
+                    format_dt(dt), BOLD, GREEN, RESET,
+                    FAINT, ITALIC, CYAN, version, RESET,
+                    ITALIC, MAGENTA, last_command, RESET
+                );
             },
             Event::Removed(dt, package, version) => {
                 if target_package != package { continue; }
-                println!("{} - Removed with: {}", format_dt(dt), last_command);
+                println!(
+                    "{} - {}{}Removed{} version {}{}{}{}{} with: {}{}{}{}",
+                    format_dt(dt), BOLD, RED, RESET,
+                    FAINT, ITALIC, CYAN, version, RESET,
+                    ITALIC, MAGENTA, last_command, RESET
+                );
             },
             Event::Upgraded(dt, package, version) => {
                 if target_package != package { continue; }
-                println!("{} - Upgraded with: {}", format_dt(dt), last_command);
+                println!(
+                    "{} - {}Upgraded{} {}from{} version{} to{} {}{}{}{}{} with: {}{}{}{}",
+                    format_dt(dt), GREEN, RESET,
+                    FAINT, RESET, FAINT, RESET,
+                    FAINT, ITALIC, CYAN, version, RESET,
+                    ITALIC, MAGENTA, last_command, RESET
+                );
             },
             Event::Downgraded(dt, package, version) => {
                 if target_package != package { continue; }
-                println!("{} - Downgraded with: {}", format_dt(dt), last_command);
+                println!(
+                    "{} - {}{}Downgraded{} {}from{} version{} to{} {}{}{}{}{} with: {}{}{}{}",
+                    format_dt(dt), RED, UNDERLINED, RESET,
+                    FAINT, RESET, FAINT, RESET,
+                    FAINT, ITALIC, CYAN, version, RESET,
+                    ITALIC, MAGENTA, last_command, RESET
+                );
             },
         }
     }
@@ -288,14 +311,14 @@ fn run(events: Events){
 fn print_map<T: Display + PartialEq + Eq + PartialOrd + Hash>(
     map: FreqMap<T>, msg: &str, n: usize, sort_by_freq: bool
 ){
-    println!("{} {}", msg, map.get_total());
+    println!("{} {}{}{}{}", msg, BOLD, RED, map.get_total(), RESET);
     let vec = if sort_by_freq {
         map.sorted_by_freq()
     } else {
         map.sorted_by_key()
     };
     for (to_display, freq) in vec.into_iter().take(n){
-        println!("\t{}: {} times", to_display, freq);
+        println!("\t{}{}{}{}: {}{}{} times", BOLD, GREEN, to_display, RESET, RED, freq, RESET);
     }
 }
 
@@ -382,7 +405,10 @@ fn parse_dt(s: &str) -> Result<(u16, u8, u8, u8), ParseIntError>{
 }
 
 fn format_dt((y, m, d, h): DT) -> String {
-    format!("{}/{:0>2}/{:0>2} {:0>2}:00", y, m, d, h)
+    format!(
+        "{}{}/{}{:0>2}{}/{}{:0>2} {}{:0>2}{}:{}00{}",
+        y, FAINT, RESET, m, FAINT, RESET, d, FAINT, h, BLACK, WHITE, RESET
+    )
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
