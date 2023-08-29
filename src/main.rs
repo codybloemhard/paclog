@@ -51,6 +51,10 @@ enum Commands{
         #[clap(long, help = "Show command used to do upgrades.")]
         upgrade_command: bool,
     },
+    Last{
+        #[clap(short, default_value_t = 50, help = "Amount of items to show.")]
+        n: usize,
+    },
 }
 
 fn main() {
@@ -87,6 +91,9 @@ fn main() {
         Commands::Package{ package, upgrade_command } => {
             package_history(parsed, package, upgrade_command);
         },
+        Commands::Last{ n } => {
+            last(parsed, n);
+        }
     }
 }
 
@@ -281,6 +288,55 @@ fn package_history(events: Events, target_package: String, upgrade_command: bool
                 println!(
                     "{} - {}{}Downgraded{} {}from{} version{} to{} {}{}{}{}{} with: {}{}{}{}",
                     format_dt(dt), RED, UNDERLINED, RESET,
+                    FAINT, RESET, FAINT, RESET,
+                    FAINT, ITALIC, CYAN, version, RESET,
+                    ITALIC, MAGENTA, last_command, RESET
+                );
+            },
+        }
+    }
+}
+
+fn last(events: Events, n: usize) {
+    let mut last_command = String::new();
+    for event in events.into_iter().rev().take(n).rev(){
+        match event{
+            // date time (y, m, d, h)
+            Event::Command(_, command) => {
+                last_command = command;
+            },
+            Event::Installed(dt, package, version) => {
+                println!(
+                    "{} - {}{}Installed{} {}{}{} version {}{}{}{}{} with: {}{}{}{}",
+                    format_dt(dt), BOLD, GREEN, RESET,
+                    BOLD, package, RESET,
+                    FAINT, ITALIC, CYAN, version, RESET,
+                    ITALIC, MAGENTA, last_command, RESET
+                );
+            },
+            Event::Removed(dt, package, version) => {
+                println!(
+                    "{} - {}{}Removed{} {}{}{} version {}{}{}{}{} with: {}{}{}{}",
+                    format_dt(dt), BOLD, RED, RESET,
+                    BOLD, package, RESET,
+                    FAINT, ITALIC, CYAN, version, RESET,
+                    ITALIC, MAGENTA, last_command, RESET
+                );
+            },
+            Event::Upgraded(dt, package, version) => {
+                println!(
+                    "{} - {}Upgraded{} {}{}{} {}from{} version{} to{} {}{}{}{}{}",
+                    format_dt(dt), GREEN, RESET,
+                    BOLD, package, RESET,
+                    FAINT, RESET, FAINT, RESET,
+                    FAINT, ITALIC, CYAN, version, RESET,
+                );
+            },
+            Event::Downgraded(dt, package, version) => {
+                println!(
+                    "{} - {}{}Downgraded{} {}{}{} {}from{} version{} to{} {}{}{}{}{} with: {}{}{}{}",
+                    format_dt(dt), RED, UNDERLINED, RESET,
+                    BOLD, package, RESET,
                     FAINT, RESET, FAINT, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
                     ITALIC, MAGENTA, last_command, RESET
