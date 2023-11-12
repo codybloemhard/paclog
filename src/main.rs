@@ -54,6 +54,8 @@ enum Commands{
     Last{
         #[clap(short, default_value_t = 50, help = "Amount of items to show.")]
         n: usize,
+        #[clap(long, help = "Ignore updates.")]
+        no_upgrades: bool,
     },
 }
 
@@ -91,8 +93,8 @@ fn main() {
         Commands::Package{ package, upgrade_command } => {
             package_history(parsed, package, upgrade_command);
         },
-        Commands::Last{ n } => {
-            last(parsed, n);
+        Commands::Last{ n, no_upgrades } => {
+            last(parsed, n, no_upgrades);
         }
     }
 }
@@ -297,30 +299,63 @@ fn package_history(events: Events, target_package: String, upgrade_command: bool
     }
 }
 
-fn last(events: Events, n: usize) {
-    let mut last_command = String::new();
-    for event in events.into_iter().rev().take(n).rev(){
+fn last(events: Events, n: usize, no_upgrades: bool) {
+    let mut filtered = Vec::new();
+    let mut m = 0;
+    let mut last_ok = false;
+    for event in events.into_iter().rev(){
+        match event{
+            c@Event::Command(_, _) => {
+                if last_ok {
+                    filtered.push(c);
+                    last_ok = false;
+                    m += 1;
+                    if m >= n { break; }
+                }
+            },
+            u@Event::Upgraded(_, _, _) => {
+                if m >= n { continue; }
+                if !no_upgrades {
+                    filtered.push(u);
+                    last_ok = true;
+                    m += 1;
+                } else {
+                    last_ok = false;
+                }
+            },
+            other => {
+                if m >= n { continue; }
+                last_ok = true;
+                filtered.push(other);
+                m += 1;
+            }
+        }
+    }
+    for event in filtered.into_iter().rev()
+    {
         match event{
             // date time (y, m, d, h)
-            Event::Command(_, command) => {
-                last_command = command;
+            Event::Command(dt, command) => {
+                println!(
+                    "{} - {}{}Command{}: {}{}{}{}",
+                    format_dt(dt), BOLD, MAGENTA, RESET,
+                    BOLD, ITALIC, command, RESET,
+                );
             },
             Event::Installed(dt, package, version) => {
                 println!(
-                    "{} - {}{}Installed{} {}{}{} version {}{}{}{}{} with: {}{}{}{}",
+                    "{} - {}{}Installed{} {}{}{} version {}{}{}{}{}",
                     format_dt(dt), BOLD, GREEN, RESET,
                     BOLD, package, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
-                    ITALIC, MAGENTA, last_command, RESET
                 );
             },
             Event::Removed(dt, package, version) => {
                 println!(
-                    "{} - {}{}Removed{} {}{}{} version {}{}{}{}{} with: {}{}{}{}",
+                    "{} - {}{}Removed{} {}{}{} version {}{}{}{}{}",
                     format_dt(dt), BOLD, RED, RESET,
                     BOLD, package, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
-                    ITALIC, MAGENTA, last_command, RESET
                 );
             },
             Event::Upgraded(dt, package, version) => {
@@ -334,12 +369,11 @@ fn last(events: Events, n: usize) {
             },
             Event::Downgraded(dt, package, version) => {
                 println!(
-                    "{} - {}{}Downgraded{} {}{}{} {}from{} version{} to{} {}{}{}{}{} with: {}{}{}{}",
+                    "{} - {}{}Downgraded{} {}{}{} {}from{} version{} to{} {}{}{}{}{}",
                     format_dt(dt), RED, UNDERLINED, RESET,
                     BOLD, package, RESET,
                     FAINT, RESET, FAINT, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
-                    ITALIC, MAGENTA, last_command, RESET
                 );
             },
         }
