@@ -14,6 +14,7 @@ use clap::{
 };
 
 use zen_colour::*;
+use vec_string::*;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -57,6 +58,10 @@ enum Commands{
         #[clap(long, help = "Ignore updates.")]
         no_upgrades: bool,
     },
+    Compact{
+        #[clap(short, default_value_t = 50, help = "Amount of items to show.")]
+        n: usize,
+    },
 }
 
 fn main() {
@@ -95,7 +100,10 @@ fn main() {
         },
         Commands::Last{ n, no_upgrades } => {
             last(parsed, n, no_upgrades);
-        }
+        },
+        Commands::Compact{ n } => {
+            compact(parsed, n);
+        },
     }
 }
 
@@ -119,7 +127,8 @@ fn parse(lines: io::Lines<io::BufReader<File>>) -> Vec<Event>{
         let dt = if let Ok(dt) = parse_dt(parts[0]) { dt } else { continue; };
 
         if parts[1] == "[PACMAN]" && parts[2] == "Running"{
-            let command = parts[3..].join(" ");
+            let mut command = parts[3..].join(" ");
+            command.retain(|c| c != '\'');
             res.push(Event::Command(dt, command));
         } else if parts[1] == "[ALPM]" && parts[2] == "installed"{
             let version = parts[4..].join(" ");
@@ -375,6 +384,78 @@ fn last(events: Events, n: usize, no_upgrades: bool) {
                     FAINT, RESET, FAINT, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
                 );
+            },
+        }
+    }
+}
+
+fn compact(events: Events, n: usize) {
+    let mut packages: Vec<String> = Vec::new();
+    let mut named = Vec::new();
+    let mut unnamed = Vec::new();
+    let mut install = 0;
+    let mut remove = 0;
+    let mut upgrade = 0;
+    let mut downgrade = 0;
+    for event in events.into_iter().rev(){
+        match event{
+            Event::Command(dt, command) => {
+                let words = command.split(' ').collect::<Vec<_>>();
+                for package in &packages {
+                    let package = package.to_string();
+                    if words.contains(&package.as_ref()) {
+                        named.push(package);
+                    } else {
+                        unnamed.push(package);
+                    }
+                }
+                let singular = install + remove + upgrade + downgrade < 2;
+                if !(named.is_empty() || (singular && upgrade > 0)) {
+                    print!("{} - ", format_dt(dt));
+                    if install > 0 {
+                        print!("{}{}Install{} ", BOLD, GREEN, RESET);
+                    }
+                    if remove > 0 {
+                        print!("{}{}Remove{} ", BOLD, RED, RESET);
+                    }
+                    if upgrade > 0 {
+                        print!("{}{}Upgrade{} ", BOLD, GREEN, RESET);
+                    }
+                    if downgrade > 0 {
+                        print!("{}{}{}Downgrade{} ", BOLD, UNDERLINED, RED, RESET);
+                    }
+                    print!("{}", named.vec_string_inner());
+                    if !unnamed.is_empty() {
+                        print!(", {}{}{}", FAINT, unnamed.vec_string_inner(), RESET);
+                    }
+                    if !singular {
+                        print!(", {}{}{}", MAGENTA, command, RESET);
+                    }
+                    println!();
+                }
+                packages.clear();
+                named.clear();
+                unnamed.clear();
+                install = 0;
+                remove = 0;
+                upgrade = 0;
+                downgrade = 0;
+            },
+            Event::Installed(_, package, _) => {
+                install = 1;
+                packages.push(package.to_string());
+            },
+            Event::Removed(_, package, _) => {
+                remove = 1;
+                packages.push(package.to_string());
+            },
+            Event::Upgraded(_, package, _) => {
+                upgrade = 1;
+                packages.push(package.to_string());
+            },
+            Event::Downgraded(_, package, _) => {
+                downgrade = 1;
+                packages.push(package.to_string());
             },
         }
     }
