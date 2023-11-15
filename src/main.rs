@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     num::ParseIntError,
     hash::Hash,
-    fmt::Display,
+    fmt::{ self, Display, Write },
 };
 
 use clap::{
@@ -28,23 +28,23 @@ enum Commands{
     Test,
     Counts,
     Commands{
-        #[clap(short, default_value_t = 10, help = "Amount of commands to show.")]
+        #[clap(short, default_value_t = 16, help = "Amount of commands to show.")]
         n: usize,
     },
     Installs{
-        #[clap(short, default_value_t = 10, help = "Amount of packages to show.")]
+        #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
     Removes{
-        #[clap(short, default_value_t = 10, help = "Amount of packages to show.")]
+        #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
     Upgrades{
-        #[clap(short, default_value_t = 10, help = "Amount of packages to show.")]
+        #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
     Downgrades{
-        #[clap(short, default_value_t = 10, help = "Amount of packages to show.")]
+        #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
     Package{
@@ -52,15 +52,13 @@ enum Commands{
         #[clap(long, help = "Show command used to do upgrades.")]
         upgrade_command: bool,
     },
-    Last{
-        #[clap(short, default_value_t = 50, help = "Amount of items to show.")]
+    History{
+        #[clap(short, default_value_t = 32, help = "Amount of items to show.")]
         n: usize,
-        #[clap(long, help = "Ignore updates.")]
+        #[clap(short='f', help = "List out every event with version.")]
+        full: bool,
+        #[clap(short='u', help = "Ignore updates in full mode.")]
         no_upgrades: bool,
-    },
-    Compact{
-        #[clap(short, default_value_t = 50, help = "Amount of items to show.")]
-        n: usize,
     },
 }
 
@@ -98,11 +96,12 @@ fn main() {
         Commands::Package{ package, upgrade_command } => {
             package_history(parsed, package, upgrade_command);
         },
-        Commands::Last{ n, no_upgrades } => {
-            last(parsed, n, no_upgrades);
-        },
-        Commands::Compact{ n } => {
-            compact(parsed, n);
+        Commands::History{ n, full, no_upgrades } => {
+            if full {
+                history_full(parsed, n, no_upgrades);
+            } else if let Err(e) = history_compact(parsed, n){
+                println!("{:?}", e);
+            }
         },
     }
 }
@@ -308,7 +307,7 @@ fn package_history(events: Events, target_package: String, upgrade_command: bool
     }
 }
 
-fn last(events: Events, n: usize, no_upgrades: bool) {
+fn history_full(events: Events, n: usize, no_upgrades: bool) {
     let mut filtered = Vec::new();
     let mut m = 0;
     let mut last_ok = false;
@@ -389,19 +388,28 @@ fn last(events: Events, n: usize, no_upgrades: bool) {
     }
 }
 
-fn compact(events: Events, n: usize) {
-    let mut packages: Vec<String> = Vec::new();
+fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
     let mut named = Vec::new();
     let mut unnamed = Vec::new();
-    let mut install = 0;
-    let mut remove = 0;
-    let mut upgrade = 0;
-    let mut downgrade = 0;
+    let mut install: Vec<String> = Vec::new();
+    let mut remove: Vec<String> = Vec::new();
+    let mut upgrade: Vec<String> = Vec::new();
+    let mut downgrade: Vec<String> = Vec::new();
+    let mut strings = Vec::new();
     for event in events.into_iter().rev(){
         match event{
             Event::Command(dt, command) => {
+                let singular =
+                    install.len().min(1) +
+                    remove.len().min(1) +
+                    upgrade.len().min(1) +
+                    downgrade.len().min(1) < 2;
                 let words = command.split(' ').collect::<Vec<_>>();
-                for package in &packages {
+                for package in install.iter()
+                    .chain(remove.iter())
+                    .chain(upgrade.iter())
+                    .chain(downgrade.iter())
+                {
                     let package = package.to_string();
                     if words.contains(&package.as_ref()) {
                         named.push(package);
@@ -409,56 +417,71 @@ fn compact(events: Events, n: usize) {
                         unnamed.push(package);
                     }
                 }
-                let singular = install + remove + upgrade + downgrade < 2;
-                if !(named.is_empty() || (singular && upgrade > 0)) {
-                    print!("{} - ", format_dt(dt));
-                    if install > 0 {
-                        print!("{}{}Install{} ", BOLD, GREEN, RESET);
+                if !named.is_empty() {
+                    let mut string = String::new();
+                    if singular && upgrade.is_empty() {
+                        write!(string, "{} - ", format_dt(dt))?;
+                        if !install.is_empty() {
+                            write!(string, "{}{}Install{} ", BOLD, GREEN, RESET)?;
+                        }
+                        if !remove.is_empty() {
+                            write!(string, "{}{}Remove{} ", BOLD, RED, RESET)?;
+                        }
+                        if !upgrade.is_empty() {
+                            write!(string, "{}{}Upgrade{} ", BOLD, GREEN, RESET)?;
+                        }
+                        if !downgrade.is_empty() {
+                            write!(string, "{}{}{}Downgrade{} ", BOLD, UNDERLINED, RED, RESET)?;
+                        }
+                        write!(string, "{}", named.vec_string_inner())?;
+                        if !unnamed.is_empty() {
+                            write!(string, ", {}{}{}", FAINT, unnamed.vec_string_inner(), RESET)?;
+                        }
+                    } else if !singular {
+                        write!(string, "{} - ", format_dt(dt))?;
+                        write!(string, "{}{}Complex{} ", BOLD, MAGENTA, RESET)?;
+                        write!(string, "{}{}{}{}",
+                            GREEN, UNDERLINED, upgrade.vec_string_inner(), RESET)?;
+                        if !upgrade.is_empty() && !downgrade.is_empty() { write!(string, ", ")?; }
+                        write!(string, "{}{}{}{}",
+                            RED, UNDERLINED, downgrade.vec_string_inner(), RESET)?;
+                        if !downgrade.is_empty() && !install.is_empty() { write!(string, ", ")?; }
+                        write!(string, "{}{}{}", GREEN, install.vec_string_inner(), RESET)?;
+                        if !install.is_empty() && !remove.is_empty() { write!(string, ", ")?; }
+                        write!(string, "{}{}{}", RED, remove.vec_string_inner(), RESET)?;
+                        write!(string, ", ")?;
+                        write!(string, "{}{}{}", MAGENTA, command, RESET)?;
                     }
-                    if remove > 0 {
-                        print!("{}{}Remove{} ", BOLD, RED, RESET);
-                    }
-                    if upgrade > 0 {
-                        print!("{}{}Upgrade{} ", BOLD, GREEN, RESET);
-                    }
-                    if downgrade > 0 {
-                        print!("{}{}{}Downgrade{} ", BOLD, UNDERLINED, RED, RESET);
-                    }
-                    print!("{}", named.vec_string_inner());
-                    if !unnamed.is_empty() {
-                        print!(", {}{}{}", FAINT, unnamed.vec_string_inner(), RESET);
-                    }
-                    if !singular {
-                        print!(", {}{}{}", MAGENTA, command, RESET);
-                    }
-                    println!();
+                    writeln!(string)?;
+                    strings.push(string);
+                    n -= 1;
+                    if n == 0 { break; }
                 }
-                packages.clear();
                 named.clear();
                 unnamed.clear();
-                install = 0;
-                remove = 0;
-                upgrade = 0;
-                downgrade = 0;
+                install.clear();
+                remove.clear();
+                upgrade.clear();
+                downgrade.clear();
             },
             Event::Installed(_, package, _) => {
-                install = 1;
-                packages.push(package.to_string());
+                install.push(package.to_string());
             },
             Event::Removed(_, package, _) => {
-                remove = 1;
-                packages.push(package.to_string());
+                remove.push(package.to_string());
             },
             Event::Upgraded(_, package, _) => {
-                upgrade = 1;
-                packages.push(package.to_string());
+                upgrade.push(package.to_string());
             },
             Event::Downgraded(_, package, _) => {
-                downgrade = 1;
-                packages.push(package.to_string());
+                downgrade.push(package.to_string());
             },
         }
     }
+    for string in strings.into_iter().rev(){
+        print!("{}", string);
+    }
+    Ok(())
 }
 
 fn run(events: Events){
