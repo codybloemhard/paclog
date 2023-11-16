@@ -1,5 +1,10 @@
 # Paclog
 
+A tool to query the pacman log file.
+Makes the data human-readable.
+Read up on statistics and package history.
+Useful when fixing problems or cleaning up the system.
+
 ```
 Copyright (C) 2023 Cody Bloemhard
 

@@ -2,7 +2,7 @@ use std::{
     fs::File,
     io::{ self, BufRead },
     path::Path,
-    collections::HashMap,
+    collections::{ HashMap, HashSet },
     num::ParseIntError,
     hash::Hash,
     fmt::{ self, Display, Write },
@@ -73,7 +73,8 @@ fn main() {
 
     match args.command{
         Commands::Test => {
-            run(parsed);
+            //run(parsed);
+            lingering(parsed);
         },
         Commands::Counts => {
             counts(parsed);
@@ -135,8 +136,7 @@ fn parse(lines: io::Lines<io::BufReader<File>>) -> Vec<Event>{
         } else if parts[1] == "[ALPM]" && parts[2] == "removed"{
             let version = parts[4..].join(" ");
             res.push(Event::Removed(dt, parts[3].to_string(), version));
-        }
-        else if parts[1] == "[ALPM]" && parts[2] == "upgraded"{
+        } else if parts[1] == "[ALPM]" && parts[2] == "upgraded"{
             let version = parts[4..].join(" ");
             res.push(Event::Upgraded(dt, parts[3].to_string(), version));
         } else if parts[1] == "[ALPM]" && parts[2] == "downgraded"{
@@ -482,6 +482,72 @@ fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
         print!("{}", string);
     }
     Ok(())
+}
+
+fn lingering(events: Events) {
+    let mut install: Vec<String> = Vec::new();
+    let mut remove: Vec<String> = Vec::new();
+    let mut upgrade: Vec<String> = Vec::new();
+    let mut downgrade: Vec<String> = Vec::new();
+    let mut irlines = Vec::new();
+    for event in events.into_iter().rev(){
+        match event{
+            Event::Command(_, command) => {
+                let words = command.split(' ').collect::<Vec<_>>();
+                for package in install.iter()
+                {
+                    let package = package.to_string();
+                    if words.contains(&package.as_ref()) {
+                        irlines.push(('i', package));
+                    }
+                }
+                for package in remove.iter()
+                {
+                    let package = package.to_string();
+                    if words.contains(&package.as_ref()) {
+                        irlines.push(('r', package));
+                    }
+                }
+                install.clear();
+                remove.clear();
+                upgrade.clear();
+                downgrade.clear();
+            },
+            Event::Installed(_, package, _) => {
+                install.push(package.to_string());
+            },
+            Event::Removed(_, package, _) => {
+                remove.push(package.to_string());
+            },
+            Event::Upgraded(_, package, _) => {
+                upgrade.push(package.to_string());
+            },
+            Event::Downgraded(_, package, _) => {
+                downgrade.push(package.to_string());
+            },
+        }
+    }
+    let mut current = HashSet::new();
+    let mut removed = HashSet::new();
+    for ir in irlines.into_iter().rev(){
+        if ir.0 == 'i' {
+            current.insert(ir.1);
+        } else {
+            current.remove(&ir.1);
+            removed.insert(ir.1);
+        }
+    }
+    for package in current.iter(){
+        if !removed.contains(package) {
+            println!("{}", package);
+        }
+    }
+    println!("--------");
+    for package in current.into_iter(){
+        if removed.contains(&package) {
+            println!("{}", package);
+        }
+    }
 }
 
 fn run(events: Events){
