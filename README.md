@@ -6,6 +6,27 @@ Read up on statistics and package history.
 Useful when fixing problems or cleaning up the system.
 
 ```
+Usage: paclog <COMMAND>
+
+Commands:
+  test
+  counts       Print some statistics.
+  commands     Print most run commands.
+  installs     Print most installed packages.
+  removes      Print most removed packages.
+  upgrades     Print most upgraded packages.
+  downgrades   Print most downgraded packages.
+  package      Print package history.
+  history      Print pacman history.
+  intentional  List currently intentionally installed packages. Bold if never removed.
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+```
 Copyright (C) 2023 Cody Bloemhard
 
 This program is free software: you can redistribute it and/or modify

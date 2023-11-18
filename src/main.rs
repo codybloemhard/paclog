@@ -26,32 +26,40 @@ struct Args{
 #[derive(Subcommand, Debug)]
 enum Commands{
     Test,
+    #[clap(about = "Print some statistics.")]
     Counts,
+    #[clap(about = "Print most run commands.")]
     Commands{
         #[clap(short, default_value_t = 16, help = "Amount of commands to show.")]
         n: usize,
     },
+    #[clap(about = "Print most installed packages.")]
     Installs{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
+    #[clap(about = "Print most removed packages.")]
     Removes{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
+    #[clap(about = "Print most upgraded packages.")]
     Upgrades{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
+    #[clap(about = "Print most downgraded packages.")]
     Downgrades{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
+    #[clap(about = "Print package history.")]
     Package{
         package: String,
         #[clap(long, help = "Show command used to do upgrades.")]
         upgrade_command: bool,
     },
+    #[clap(about = "Print pacman history.")]
     History{
         #[clap(short, default_value_t = 32, help = "Amount of items to show.")]
         n: usize,
@@ -60,6 +68,8 @@ enum Commands{
         #[clap(short='u', help = "Ignore updates in full mode.")]
         no_upgrades: bool,
     },
+    #[clap(about = "List currently intentionally installed packages. Bold if never removed.")]
+    Intentional,
 }
 
 fn main() {
@@ -73,8 +83,7 @@ fn main() {
 
     match args.command{
         Commands::Test => {
-            //run(parsed);
-            lingering(parsed);
+            run(parsed);
         },
         Commands::Counts => {
             counts(parsed);
@@ -103,6 +112,9 @@ fn main() {
             } else if let Err(e) = history_compact(parsed, n){
                 println!("{:?}", e);
             }
+        },
+        Commands::Intentional => {
+            intentional(parsed);
         },
     }
 }
@@ -484,7 +496,7 @@ fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
     Ok(())
 }
 
-fn lingering(events: Events) {
+fn intentional(events: Events) {
     let mut install: Vec<String> = Vec::new();
     let mut remove: Vec<String> = Vec::new();
     let mut upgrade: Vec<String> = Vec::new();
@@ -537,16 +549,28 @@ fn lingering(events: Events) {
             removed.insert(ir.1);
         }
     }
+    let cs = term_size::dimensions().unwrap_or((0, 0)).0;
+    let l = current.iter().map(|p| p.chars().count()).max().unwrap_or(0);
+    let l = if cs != 0 {
+        let cols = cs / l;
+        l + ((cs - cols * l) / cols).min(1)
+    } else {
+        0
+    };
+    let mut c = 0;
     for package in current.iter(){
+        if c + l >= cs {
+            println!();
+            c = l;
+        } else {
+            c += l;
+        }
         if !removed.contains(package) {
-            println!("{}", package);
+            print!("{}", BOLD);
+        } else {
+            print!("{}", RESET);
         }
-    }
-    println!("--------");
-    for package in current.into_iter(){
-        if removed.contains(&package) {
-            println!("{}", package);
-        }
+        print!("{:<l$}", package);
     }
 }
 
