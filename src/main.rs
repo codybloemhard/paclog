@@ -1,7 +1,4 @@
 use std::{
-    fs::File,
-    io::{ self, BufRead },
-    path::Path,
     collections::{ HashMap, HashSet },
     num::ParseIntError,
     hash::Hash,
@@ -15,6 +12,7 @@ use clap::{
 
 use zen_colour::*;
 use vec_string::*;
+use simpleio::read_lines;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -74,9 +72,8 @@ enum Commands{
 
 fn main() {
     let args = Args::parse();
-    let lines = if let Ok(lines) = read_lines("/var/log/pacman.log") {
-        lines
-    } else {
+    let lines = read_lines("/var/log/pacman.log");
+    if lines.is_empty() {
         panic!("Error: could not read '/var/log/pacman.log'!");
     };
     let parsed = parse(lines);
@@ -129,10 +126,10 @@ enum Event{
 }
 type Events = Vec<Event>;
 
-fn parse(lines: io::Lines<io::BufReader<File>>) -> Vec<Event>{
+fn parse(lines: Vec<String>) -> Vec<Event>{
     let mut res = Vec::new();
 
-    for line in lines.flatten() {
+    for line in lines {
         let parts = line.split(' ').collect::<Vec<_>>();
         if parts.len() < 4 { continue; }
 
@@ -702,9 +699,3 @@ fn format_dt((y, m, d, h): DT) -> String {
     )
 }
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-    where P: AsRef<Path>
-{
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
-}

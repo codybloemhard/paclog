@@ -16,3 +16,4 @@ clap = { version = "4.4.8", features = ["derive"] }
 zen-colour = "1.0.1"
 vec-string = "0.2.0"
 term_size = "0.3.2"
+simpleio = "0.2.2"
