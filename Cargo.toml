@@ -1,6 +1,6 @@
 [package]
 name = "paclog"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 authors = ["Cody Bloemhard <codybloemhard@gmail.com>"]
 readme = "README.md"
@@ -12,8 +12,8 @@ categories = ["command-line-interface"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.4.8", features = ["derive"] }
-zen-colour = "1.0.1"
+clap = { version = "4.5.4", features = ["derive"] }
+zen-colour = "1.1.1"
 vec-string = "0.2.0"
 term_size = "0.3.2"
 simpleio = "0.2.2"
