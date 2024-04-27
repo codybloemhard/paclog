@@ -23,51 +23,59 @@ struct Args{
 
 #[derive(Subcommand, Debug)]
 enum Commands{
-    Test,
     #[clap(about = "Print some statistics.")]
     Counts,
-    #[clap(about = "Print most run commands.")]
+    #[allow(clippy::enum_variant_names)]
+    #[clap(short_flag = 'c', about = "List most run commands.")]
     Commands{
         #[clap(short, default_value_t = 16, help = "Amount of commands to show.")]
         n: usize,
     },
-    #[clap(about = "Print most installed packages.")]
+    #[clap(short_flag = 'i', about = "List most installed packages.")]
     Installs{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
-    #[clap(about = "Print most removed packages.")]
+    #[clap(short_flag = 'r', about = "List most removed packages.")]
     Removes{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
-    #[clap(about = "Print most upgraded packages.")]
+    #[clap(short_flag = 'u', about = "List most upgraded packages.")]
     Upgrades{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
-    #[clap(about = "Print most downgraded packages.")]
+    #[clap(short_flag = 'd', about = "List most downgraded packages.")]
     Downgrades{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
     },
-    #[clap(about = "Print package history.")]
+    #[clap(short_flag = 'p', about = "List package history.")]
     Package{
         package: String,
         #[clap(long, help = "Show command used to do upgrades.")]
         upgrade_command: bool,
     },
-    #[clap(about = "Print pacman history.")]
+    #[clap(short_flag = 'H', about = "List pacman history.")]
     History{
         #[clap(short, default_value_t = 32, help = "Amount of items to show.")]
         n: usize,
-        #[clap(short='f', help = "List out every event with version.")]
+        #[clap(short = 'f', help = "List out every event with version.")]
         full: bool,
-        #[clap(short='u', help = "Ignore updates in full mode.")]
+        #[clap(short = 'u', help = "Ignore updates in full mode.")]
         no_upgrades: bool,
     },
-    #[clap(about = "List currently intentionally installed packages. Bold if never removed.")]
+    #[clap(
+        short_flag = 'I',
+        about = "List currently intentionally installed packages. Bold if never removed."
+    )]
     Intentional,
+    #[clap(short_flag = 't', about = "Print some statistics regarding time and dates.")]
+    Time{
+        #[clap(short = 'f', help = "Also print stats for months and days.")]
+        full: bool,
+    },
 }
 
 fn main() {
@@ -79,9 +87,6 @@ fn main() {
     let parsed = parse(lines);
 
     match args.command{
-        Commands::Test => {
-            run(parsed);
-        },
         Commands::Counts => {
             counts(parsed);
         },
@@ -112,6 +117,9 @@ fn main() {
         },
         Commands::Intentional => {
             intentional(parsed);
+        },
+        Commands::Time { full }=> {
+            time(parsed, full);
         },
     }
 }
@@ -571,7 +579,7 @@ fn intentional(events: Events) {
     }
 }
 
-fn run(events: Events){
+fn time(events: Events, full: bool){
     let mut y_map = FreqMap::new();
     let mut m_map = FreqMap::new();
     let mut d_map = FreqMap::new();
@@ -580,66 +588,38 @@ fn run(events: Events){
     for event in events{
         if let Event::Command((y, m, d, h), _) = event {
             y_map.inc(y);
-            m_map.inc(m as u16);
-            d_map.inc(d as u16);
+            if full {
+                m_map.inc(m as u16);
+                d_map.inc(d as u16);
+            }
             h_map.inc(h as u16);
         }
     }
 
-    // print_bargraph(into_graphdata(y_map), 32, 4);
-    print_bargraph(into_graphdata(m_map), 32, 5);
-    print_bargraph(into_graphdata(d_map), 32, 3);
-    print_bargraph(into_graphdata(h_map), 32, 4);
-    // print_map(y_map, "Commands (Year):", 10, false);
-    // print_map(m_map, "Commands (Month):", 12, false);
-    // print_map(d_map, "Commands (Day):", 31, false);
-    // print_map(h_map, "Commands (Hour):", 24, false);
+    print_map(y_map, "Commands (Year):", 10, false);
+    if full {
+        print_map(m_map, "Commands (Month):", 12, false);
+        print_map(d_map, "Commands (Day):", 31, false);
+    }
+    print_map(h_map, "Commands (Hour):", 24, false);
 }
 
 fn print_map<T: Display + PartialEq + Eq + PartialOrd + Hash>(
     map: FreqMap<T>, msg: &str, n: usize, sort_by_freq: bool
 ){
-    println!("{} {}{}{}{}", msg, BOLD, RED, map.get_total(), RESET);
+    let total = map.get_total();
+    println!("{} {}{}{}{}", msg, BOLD, RED, total, RESET);
     let vec = if sort_by_freq {
         map.sorted_by_freq()
     } else {
         map.sorted_by_key()
     };
     for (to_display, freq) in vec.into_iter().take(n){
-        println!("\t{}{}{}{}: {}{}{} times", BOLD, GREEN, to_display, RESET, RED, freq, RESET);
-    }
-}
-
-fn into_graphdata(map: FreqMap<u16>) -> Vec<(u16, usize)>{
-    // fill holes
-    let mut filled = Vec::new();
-    let mut prev = 0;
-    for (k, f) in map.sorted_by_key().into_iter(){
-        while k > prev + 1{
-            filled.push((prev + 1, 0));
-            prev += 1;
-        }
-        filled.push((k, f));
-        prev = k;
-    }
-    filled
-}
-
-fn print_bargraph(data: Vec<(u16, usize)>, h: usize, bw: usize){
-    let max = *data.iter().map(|(_, f)| f).max().unwrap();
-    for i in 0..h{
-        let j = h - i;
-        for (_, f) in &data{
-            let c = if *f as f32 / max as f32 >= j as f32 / h as f32{
-                "x"
-            } else {
-                " "
-            };
-            for _ in 0..bw{
-                print!("{}", c);
-            }
-        }
-        println!();
+        println!(
+            "\t{}{}{}{}: {}{}{} times ({}{:.2}%{})",
+            BOLD, GREEN, to_display, RESET, RED, freq, RESET, YELLOW,
+            freq as f32 / total as f32 * 100.0, RESET,
+        );
     }
 }
 
