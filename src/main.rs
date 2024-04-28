@@ -24,7 +24,7 @@ struct Args{
 #[derive(Subcommand, Debug)]
 enum Commands{
     #[clap(about = "Print some statistics.")]
-    Counts,
+    Summary,
     #[allow(clippy::enum_variant_names)]
     #[clap(short_flag = 'c', about = "List most run commands.")]
     Commands{
@@ -87,8 +87,8 @@ fn main() {
     let parsed = parse(lines);
 
     match args.command{
-        Commands::Counts => {
-            counts(parsed);
+        Commands::Summary => {
+            summary(parsed);
         },
         Commands::Commands{ n } => {
             top_commands(parsed, n);
@@ -165,7 +165,7 @@ fn parse(lines: Vec<String>) -> Vec<Event>{
     res
 }
 
-fn counts(events: Events){
+fn summary(events: Events){
     let nevents = events.len();
     let mut packages = 0usize;
     let mut commands = 0usize;
@@ -175,12 +175,21 @@ fn counts(events: Events){
     let mut upgrades = 0usize;
     let mut downgrades = 0usize;
     let mut last_command_update = false;
+    let mut y_map = FreqMap::new();
+
+    if let Some(Event::Command(dt, command)) = events.first() {
+        println!(
+            "First command ran on {}:\n\t\"{}{}{}\"",
+            format_dt(*dt), MAGENTA, command, RESET
+        );
+    }
 
     for event in events{
         match event{
-            Event::Command(_, _) => {
+            Event::Command((y, _, _, _), _) => {
                 last_command_update = false;
                 commands += 1;
+                y_map.inc(y);
             },
             Event::Installed(_, _, _) => {
                 packages += 1;
@@ -203,14 +212,15 @@ fn counts(events: Events){
         }
     }
 
+    println!("Packages installed: {}{}{}\n", RED, packages, RESET);
     println!("Events: {}{}{}", RED, nevents, RESET);
-    println!("Packages: {}{}{}", RED, packages, RESET);
     println!("Updates: {}{}{}", RED, updates, RESET);
-    println!("Commands: {}{}{}", RED, commands, RESET);
     println!("Installs: {}{}{}", RED, installs, RESET);
     println!("Removes: {}{}{}", RED, removes, RESET);
     println!("Upgrades: {}{}{}", RED, upgrades, RESET);
     println!("Downgrades: {}{}{}", RED, downgrades, RESET);
+    println!();
+    print_map(y_map, "Commands:", 100, false);
 }
 
 fn top_commands(events: Events, n: usize){
@@ -674,8 +684,8 @@ fn parse_dt(s: &str) -> Result<(u16, u8, u8, u8), ParseIntError>{
 
 fn format_dt((y, m, d, h): DT) -> String {
     format!(
-        "{}{}/{}{:0>2}{}/{}{:0>2} {}{:0>2}{}:{}00{}",
-        y, FAINT, RESET, m, FAINT, RESET, d, FAINT, h, BLACK, WHITE, RESET
+        "{}{}/{}{:0>2}{}/{}{:0>2} {}{:0>2}{}:{}{}00{}",
+        y, FAINT, RESET, m, FAINT, RESET, d, FAINT, h, BLACK, RESET, FAINT, RESET
     )
 }
 
