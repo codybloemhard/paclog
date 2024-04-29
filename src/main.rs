@@ -23,7 +23,7 @@ struct Args{
 
 #[derive(Subcommand, Debug)]
 enum Commands{
-    #[clap(about = "Print some statistics.")]
+    #[clap(short_flag = 's', about = "Print some statistics.")]
     Summary,
     #[allow(clippy::enum_variant_names)]
     #[clap(short_flag = 'c', about = "List most run commands.")]
@@ -73,8 +73,16 @@ enum Commands{
     Intentional,
     #[clap(short_flag = 't', about = "Print some statistics regarding time and dates.")]
     Time{
-        #[clap(short = 'f', help = "Also print stats for months and days.")]
-        full: bool,
+        #[clap(short = 'a', help = "Print stats for all categories.")]
+        all: bool,
+        #[clap(short = 'y', help = "Print stats per year.")]
+        year: bool,
+        #[clap(short = 'm', help = "Print stats per month.")]
+        month: bool,
+        #[clap(short = 'd', help = "Print stats per day.")]
+        day: bool,
+        #[clap(short = 'H', help = "Print stats per hour.")]
+        hour: bool,
     },
 }
 
@@ -118,8 +126,8 @@ fn main() {
         Commands::Intentional => {
             intentional(parsed);
         },
-        Commands::Time { full }=> {
-            time(parsed, full);
+        Commands::Time { all, year, month, day, hour }=> {
+            time(parsed, all, year, month, day, hour);
         },
     }
 }
@@ -168,7 +176,6 @@ fn parse(lines: Vec<String>) -> Vec<Event>{
 fn summary(events: Events){
     let nevents = events.len();
     let mut packages = 0usize;
-    let mut commands = 0usize;
     let mut updates = 0usize;
     let mut installs = 0usize;
     let mut removes = 0usize;
@@ -188,7 +195,6 @@ fn summary(events: Events){
         match event{
             Event::Command((y, _, _, _), _) => {
                 last_command_update = false;
-                commands += 1;
                 y_map.inc(y);
             },
             Event::Installed(_, _, _) => {
@@ -589,29 +595,53 @@ fn intentional(events: Events) {
     }
 }
 
-fn time(events: Events, full: bool){
-    let mut y_map = FreqMap::new();
-    let mut m_map = FreqMap::new();
-    let mut d_map = FreqMap::new();
-    let mut h_map = FreqMap::new();
+fn time(events: Events, all: bool, year: bool, month: bool, day: bool, hour: bool){
+    let (year, month, day, hour) = (
+        year | all | !(month | day | hour), month | all, day | all, hour | all
+    );
+
+    let fmn = FreqMap::new;
+    let ma = || [fmn(), fmn(), fmn(), fmn()];
+    let [mut cy, mut cm, mut cd, mut ch] = ma();
+    let [mut uy, mut um, mut ud, mut uh] = ma();
+    let [mut dy, mut dm, mut dd, mut dh] = ma();
+    let [mut iy, mut im, mut id, mut ih] = ma();
+    let [mut ry, mut rm, mut rd, mut rh] = ma();
+
+    type FMmr<'a> = &'a mut FreqMap<u16>;
+    let inc = |my: FMmr, mm: FMmr, md: FMmr, mh: FMmr, (y, m, d, h): DT| {
+        if year { my.inc(y); }
+        if month { mm.inc(m as u16); }
+        if day { md.inc(d as u16); }
+        if hour { mh.inc(h as u16); }
+    };
 
     for event in events{
-        if let Event::Command((y, m, d, h), _) = event {
-            y_map.inc(y);
-            if full {
-                m_map.inc(m as u16);
-                d_map.inc(d as u16);
-            }
-            h_map.inc(h as u16);
+        match event {
+            Event::Command(dt, _) => inc(&mut cy, &mut cm, &mut cd, &mut ch, dt),
+            Event::Installed(dt, _, _) => inc(&mut uy, &mut um, &mut ud, &mut uh, dt),
+            Event::Removed(dt, _, _) => inc(&mut ry, &mut rm, &mut rd, &mut rh, dt),
+            Event::Upgraded(dt, _, _) => inc(&mut iy, &mut im, &mut id, &mut ih, dt),
+            Event::Downgraded(dt, _, _) => inc(&mut dy, &mut dm, &mut dd, &mut dh, dt),
         }
     }
 
-    print_map(y_map, "Commands (Year):", 10, false);
-    if full {
-        print_map(m_map, "Commands (Month):", 12, false);
-        print_map(d_map, "Commands (Day):", 31, false);
-    }
-    print_map(h_map, "Commands (Hour):", 24, false);
+    type FM = FreqMap<u16>;
+    let pm = |condition: bool, c: FM, i: FM, r: FM, u: FM, d: FM, n: usize, msg: &str| {
+        if !condition { return; }
+        println!(" {}\n", msg);
+        print_map(c, "Commands:", n, false);
+        print_map(i, "Installs:", n, false);
+        print_map(r, "Removes:", n, false);
+        print_map(u, "Upgrades:", n, false);
+        print_map(d, "Downgrades:", n, false);
+        println!();
+    };
+
+    pm(year, cy, iy, ry, uy, dy, 100, "- Per year -");
+    pm(month, cm, im, rm, um, dm, 12, "- Per month -");
+    pm(day, cd, id, rd, ud, dd, 31, "- Per day -");
+    pm(hour, ch, ih, rh, uh, dh, 24, "- Per hour -");
 }
 
 fn print_map<T: Display + PartialEq + Eq + PartialOrd + Hash>(

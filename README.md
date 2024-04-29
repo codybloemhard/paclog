@@ -9,7 +9,7 @@ Useful when fixing problems or cleaning up the system.
 Usage: paclog <COMMAND>
 
 Commands:
-  summary          Print some statistics.
+  summary, -s      Print some statistics.
   commands, -c     List most run commands.
   installs, -i     List most installed packages.
   removes, -r      List most removed packages.
