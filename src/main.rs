@@ -30,26 +30,36 @@ enum Commands{
     Commands{
         #[clap(short, default_value_t = 16, help = "Amount of commands to show.")]
         n: usize,
+        #[clap(short, default_value_t = false, help = "Show all.")]
+        a: bool,
     },
     #[clap(short_flag = 'i', about = "List most installed packages.")]
     Installs{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
+        #[clap(short, default_value_t = false, help = "Show all.")]
+        a: bool,
     },
     #[clap(short_flag = 'r', about = "List most removed packages.")]
     Removes{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
+        #[clap(short, default_value_t = false, help = "Show all.")]
+        a: bool,
     },
     #[clap(short_flag = 'u', about = "List most upgraded packages.")]
     Upgrades{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
+        #[clap(short, default_value_t = false, help = "Show all.")]
+        a: bool,
     },
     #[clap(short_flag = 'd', about = "List most downgraded packages.")]
     Downgrades{
         #[clap(short, default_value_t = 16, help = "Amount of packages to show.")]
         n: usize,
+        #[clap(short, default_value_t = false, help = "Show all.")]
+        a: bool,
     },
     #[clap(short_flag = 'p', about = "List package history.")]
     Package{
@@ -70,7 +80,10 @@ enum Commands{
         short_flag = 'I',
         about = "List currently intentionally installed packages. Bold if never removed."
     )]
-    Intentional,
+    Intentional{
+        #[clap(short = 'l', help = "List one package per line.")]
+        list: bool,
+    },
     #[clap(short_flag = 't', about = "Print some statistics regarding time and dates.")]
     Time{
         #[clap(short = 'a', help = "Print stats for all categories.")]
@@ -98,20 +111,20 @@ fn main() {
         Commands::Summary => {
             summary(parsed);
         },
-        Commands::Commands{ n } => {
-            top_commands(parsed, n);
+        Commands::Commands{ n, a } => {
+            top_commands(parsed, n, a);
         },
-        Commands::Installs{ n } => {
-            top_installs(parsed, n);
+        Commands::Installs{ n, a } => {
+            top_installs(parsed, n, a);
         },
-        Commands::Removes{ n } => {
-            top_removes(parsed, n);
+        Commands::Removes{ n, a } => {
+            top_removes(parsed, n, a);
         },
-        Commands::Upgrades{ n } => {
-            top_upgrades(parsed, n);
+        Commands::Upgrades{ n, a } => {
+            top_upgrades(parsed, n, a);
         },
-        Commands::Downgrades{ n } => {
-            top_downgrades(parsed, n);
+        Commands::Downgrades{ n, a } => {
+            top_downgrades(parsed, n, a);
         },
         Commands::Package{ package, upgrade_command } => {
             package_history(parsed, package, upgrade_command);
@@ -123,10 +136,10 @@ fn main() {
                 println!("{:?}", e);
             }
         },
-        Commands::Intentional => {
-            intentional(parsed);
+        Commands::Intentional { list }=> {
+            intentional(parsed, list);
         },
-        Commands::Time { all, year, month, day, hour }=> {
+        Commands::Time { all, year, month, day, hour } => {
             time(parsed, all, year, month, day, hour);
         },
     }
@@ -226,64 +239,33 @@ fn summary(events: Events){
     println!("Upgrades: {}{}{}", RED, upgrades, RESET);
     println!("Downgrades: {}{}{}", RED, downgrades, RESET);
     println!();
-    print_map(y_map, "Commands:", 100, false);
+    print_map(y_map, "Commands", 100, false);
 }
 
-fn top_commands(events: Events, n: usize){
-    let mut command_map = FreqMap::new();
-    for event in events{
-        if let Event::Command(_, com) = event {
-            command_map.inc(com);
+macro_rules! impl_top{
+    ($fn_name:ident, $enum_match:ident, $msg:expr, $obj:expr) => {
+        fn $fn_name(events: Events, n: usize, all: bool){
+            let mut map = FreqMap::new();
+            for event in events{
+                if let Event::$enum_match(_, prog, ..) = event {
+                    map.inc(prog);
+                }
+            }
+
+            let n = if all { map.len() } else { n };
+            print_map(map, $msg, n, true);
+            if all {
+                println!("Number of {}: {RED}{BOLD}{n}{RESET}", $obj);
+            }
         }
-    }
-
-    print_map(command_map, "Commands:", n, true);
+    };
 }
 
-fn top_installs(events: Events, n: usize){
-    let mut install_map = FreqMap::new();
-    for event in events{
-        if let Event::Installed(_, prog, _) = event {
-            install_map.inc(prog);
-        }
-    }
-
-    print_map(install_map, "Installs:", n, true);
-}
-
-fn top_removes(events: Events, n: usize){
-    let mut remove_map = FreqMap::new();
-    for event in events{
-        if let Event::Removed(_, prog, _) = event {
-            remove_map.inc(prog);
-        }
-    }
-
-    print_map(remove_map, "Removes:", n, true);
-}
-
-fn top_upgrades(events: Events, n: usize){
-    let mut upgrade_map = FreqMap::new();
-    for event in events{
-        if let Event::Upgraded(_, prog, _) = event{
-            upgrade_map.inc(prog);
-        }
-    }
-
-    print_map(upgrade_map, "Upgrades:", n, true);
-}
-
-fn top_downgrades(events: Events, n: usize){
-    let mut downgrade_map = FreqMap::new();
-    for event in events{
-        if let Event::Downgraded(_, prog, _) = event{
-            downgrade_map.inc(prog);
-        }
-    }
-
-    print_map(downgrade_map, "Downgrades:", n, true);
-}
-
+impl_top!(top_commands, Command, "Commands", "commands");
+impl_top!(top_installs, Installed, "Installs", "packages");
+impl_top!(top_removes, Removed, "Removes", "packages");
+impl_top!(top_upgrades, Upgraded, "Upgrades", "packages");
+impl_top!(top_downgrades, Downgraded, "Downgrades", "packages");
 
 fn package_history(events: Events, target_package: String, upgrade_command: bool){
     let mut last_command = String::new();
@@ -517,7 +499,7 @@ fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
     Ok(())
 }
 
-fn intentional(events: Events) {
+fn intentional(events: Events, list: bool) {
     let mut install: Vec<String> = Vec::new();
     let mut remove: Vec<String> = Vec::new();
     let mut upgrade: Vec<String> = Vec::new();
@@ -580,6 +562,10 @@ fn intentional(events: Events) {
     };
     let mut c = 0;
     for package in current.iter(){
+        if list {
+            println!("{}", package);
+            continue;
+        }
         if c + l >= cs {
             println!();
             c = l;
@@ -630,11 +616,11 @@ fn time(events: Events, all: bool, year: bool, month: bool, day: bool, hour: boo
     let pm = |condition: bool, c: FM, i: FM, r: FM, u: FM, d: FM, n: usize, msg: &str| {
         if !condition { return; }
         println!(" {}\n", msg);
-        print_map(c, "Commands:", n, false);
-        print_map(i, "Installs:", n, false);
-        print_map(r, "Removes:", n, false);
-        print_map(u, "Upgrades:", n, false);
-        print_map(d, "Downgrades:", n, false);
+        print_map(c, "Commands", n, false);
+        print_map(i, "Installs", n, false);
+        print_map(r, "Removes", n, false);
+        print_map(u, "Upgrades", n, false);
+        print_map(d, "Downgrades", n, false);
         println!();
     };
 
@@ -647,8 +633,8 @@ fn time(events: Events, all: bool, year: bool, month: bool, day: bool, hour: boo
 fn print_map<T: Display + PartialEq + Eq + PartialOrd + Hash>(
     map: FreqMap<T>, msg: &str, n: usize, sort_by_freq: bool
 ){
-    let total = map.get_total();
-    println!("{} {}{}{}{}", msg, BOLD, RED, total, RESET);
+    let total = map.total();
+    println!("{}: {}{}{}{}", msg, BOLD, RED, total, RESET);
     let vec = if sort_by_freq {
         map.sorted_by_freq()
     } else {
@@ -688,8 +674,12 @@ impl<T: PartialEq + Eq + Hash> FreqMap<T>{
         vec
     }
 
-    pub fn get_total(&self) -> usize{
+    pub fn total(&self) -> usize{
         self.total
+    }
+
+    pub fn len(&self) -> usize{
+        self.map.iter().len()
     }
 }
 
