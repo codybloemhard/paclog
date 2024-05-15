@@ -5,8 +5,10 @@ Makes the data human-readable.
 Read up on statistics and package history.
 Useful when fixing problems or cleaning up the system.
 
+<https://crates.io/crates/paclog>
+
 ```
-Usage: paclog <COMMAND>
+Usage: paclog [OPTIONS] <COMMAND>
 
 Commands:
   summary, -s      Print some statistics.
@@ -22,6 +24,7 @@ Commands:
   help             Print this message or the help of the given subcommand(s)
 
 Options:
+  -l <PATH>      Path to logfile. [default: /var/log/pacman.log]
   -h, --help     Print help
   -V, --version  Print version
 ```

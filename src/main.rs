@@ -19,6 +19,8 @@ use simpleio::read_lines;
 struct Args{
     #[clap(subcommand)]
     command: Commands,
+    #[clap(short = 'l', default_value = "/var/log/pacman.log", help = "Path to logfile.")]
+    path: String,
 }
 
 #[derive(Subcommand, Debug)]
@@ -101,9 +103,9 @@ enum Commands{
 
 fn main() {
     let args = Args::parse();
-    let lines = read_lines("/var/log/pacman.log");
+    let lines = read_lines(&args.path);
     if lines.is_empty() {
-        panic!("Error: could not read '/var/log/pacman.log'!");
+        panic!("Error: could not read '{}'!", args.path);
     };
     let parsed = parse(lines);
 
