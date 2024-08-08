@@ -607,9 +607,9 @@ fn time(events: Events, all: bool, year: bool, month: bool, day: bool, hour: boo
     for event in events{
         match event {
             Event::Command(dt, _) => inc(&mut cy, &mut cm, &mut cd, &mut ch, dt),
-            Event::Installed(dt, _, _) => inc(&mut uy, &mut um, &mut ud, &mut uh, dt),
+            Event::Installed(dt, _, _) => inc(&mut iy, &mut im, &mut id, &mut ih, dt),
             Event::Removed(dt, _, _) => inc(&mut ry, &mut rm, &mut rd, &mut rh, dt),
-            Event::Upgraded(dt, _, _) => inc(&mut iy, &mut im, &mut id, &mut ih, dt),
+            Event::Upgraded(dt, _, _) => inc(&mut uy, &mut um, &mut ud, &mut uh, dt),
             Event::Downgraded(dt, _, _) => inc(&mut dy, &mut dm, &mut dd, &mut dh, dt),
         }
     }
