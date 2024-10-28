@@ -280,7 +280,7 @@ fn package_history(events: Events, target_package: String, upgrade_command: bool
             Event::Installed(dt, package, version) => {
                 if target_package != package { continue; }
                 println!(
-                    "{} - {}{}Installed{} version {}{}{}{}{} with: {}{}{}{}",
+                    "{} - {}{}installed{} version {}{}{}{}{} with: {}{}{}{}",
                     format_dt(dt), BOLD, GREEN, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
                     ITALIC, MAGENTA, last_command, RESET
@@ -289,7 +289,7 @@ fn package_history(events: Events, target_package: String, upgrade_command: bool
             Event::Removed(dt, package, version) => {
                 if target_package != package { continue; }
                 println!(
-                    "{} - {}{}Removed{} version {}{}{}{}{} with: {}{}{}{}",
+                    "{} - {}{}removed{} version {}{}{}{}{} with: {}{}{}{}",
                     format_dt(dt), BOLD, RED, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
                     ITALIC, MAGENTA, last_command, RESET
@@ -298,7 +298,7 @@ fn package_history(events: Events, target_package: String, upgrade_command: bool
             Event::Upgraded(dt, package, version) => {
                 if target_package != package { continue; }
                 println!(
-                    "{} - {}Upgraded{} {}from{} version{} to{} {}{}{}{}{}",
+                    "{} - {}upgraded{} {}from{} version{} to{} {}{}{}{}{}",
                     format_dt(dt), GREEN, RESET,
                     FAINT, RESET, FAINT, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
@@ -313,7 +313,7 @@ fn package_history(events: Events, target_package: String, upgrade_command: bool
             Event::Downgraded(dt, package, version) => {
                 if target_package != package { continue; }
                 println!(
-                    "{} - {}{}Downgraded{} {}from{} version{} to{} {}{}{}{}{} with: {}{}{}{}",
+                    "{} - {}{}downgraded{} {}from{} version{} to{} {}{}{}{}{} with: {}{}{}{}",
                     format_dt(dt), RED, UNDERLINED, RESET,
                     FAINT, RESET, FAINT, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
@@ -362,14 +362,14 @@ fn history_full(events: Events, n: usize, no_upgrades: bool) {
             // date time (y, m, d, h)
             Event::Command(dt, command) => {
                 println!(
-                    "{} - {}{}Command{}: {}{}{}{}",
+                    "{} - {}{}command{}: {}{}{}{}",
                     format_dt(dt), BOLD, MAGENTA, RESET,
                     BOLD, ITALIC, command, RESET,
                 );
             },
             Event::Installed(dt, package, version) => {
                 println!(
-                    "{} - {}{}Installed{} {}{}{} version {}{}{}{}{}",
+                    "{} - {}{}installed{} {}{}{} version {}{}{}{}{}",
                     format_dt(dt), BOLD, GREEN, RESET,
                     BOLD, package, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
@@ -377,7 +377,7 @@ fn history_full(events: Events, n: usize, no_upgrades: bool) {
             },
             Event::Removed(dt, package, version) => {
                 println!(
-                    "{} - {}{}Removed{} {}{}{} version {}{}{}{}{}",
+                    "{} - {}{}removed{} {}{}{} version {}{}{}{}{}",
                     format_dt(dt), BOLD, RED, RESET,
                     BOLD, package, RESET,
                     FAINT, ITALIC, CYAN, version, RESET,
@@ -385,7 +385,7 @@ fn history_full(events: Events, n: usize, no_upgrades: bool) {
             },
             Event::Upgraded(dt, package, version) => {
                 println!(
-                    "{} - {}Upgraded{} {}{}{} {}from{} version{} to{} {}{}{}{}{}",
+                    "{} - {}upgraded{} {}{}{} {}from{} version{} to{} {}{}{}{}{}",
                     format_dt(dt), GREEN, RESET,
                     BOLD, package, RESET,
                     FAINT, RESET, FAINT, RESET,
@@ -394,7 +394,7 @@ fn history_full(events: Events, n: usize, no_upgrades: bool) {
             },
             Event::Downgraded(dt, package, version) => {
                 println!(
-                    "{} - {}{}Downgraded{} {}{}{} {}from{} version{} to{} {}{}{}{}{}",
+                    "{} - {}{}downgraded{} {}{}{} {}from{} version{} to{} {}{}{}{}{}",
                     format_dt(dt), RED, UNDERLINED, RESET,
                     BOLD, package, RESET,
                     FAINT, RESET, FAINT, RESET,
@@ -439,16 +439,16 @@ fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
                     if singular && upgrade.is_empty() {
                         write!(string, "{} - ", format_dt(dt))?;
                         if !install.is_empty() {
-                            write!(string, "{}{}Install{} ", BOLD, GREEN, RESET)?;
+                            write!(string, "{}{}install{} ", BOLD, GREEN, RESET)?;
                         }
                         if !remove.is_empty() {
-                            write!(string, "{}{}Remove{} ", BOLD, RED, RESET)?;
+                            write!(string, "{}{}remove{} ", BOLD, RED, RESET)?;
                         }
                         if !upgrade.is_empty() {
-                            write!(string, "{}{}Upgrade{} ", BOLD, GREEN, RESET)?;
+                            write!(string, "{}{}upgrade{} ", BOLD, GREEN, RESET)?;
                         }
                         if !downgrade.is_empty() {
-                            write!(string, "{}{}{}Downgrade{} ", BOLD, UNDERLINED, RED, RESET)?;
+                            write!(string, "{}{}{}downgrade{} ", BOLD, UNDERLINED, RED, RESET)?;
                         }
                         write!(string, "{}", named.vec_string_inner())?;
                         if !unnamed.is_empty() {
