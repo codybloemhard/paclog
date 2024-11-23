@@ -419,7 +419,7 @@ fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
                 let singular =
                     install.len().min(1) +
                     remove.len().min(1) +
-                    upgrade.len().min(1) +
+                    // upgrade.len().min(1) +
                     downgrade.len().min(1) < 2;
                 let words = command.split(' ').collect::<Vec<_>>();
                 for package in install.iter()
@@ -434,41 +434,40 @@ fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
                         unnamed.push(package);
                     }
                 }
-                if !named.is_empty() {
-                    let mut string = String::new();
-                    if singular && upgrade.is_empty() {
-                        write!(string, "{} - ", format_dt(dt))?;
-                        if !install.is_empty() {
-                            write!(string, "{}{}install{} ", BOLD, GREEN, RESET)?;
-                        }
-                        if !remove.is_empty() {
-                            write!(string, "{}{}remove{} ", BOLD, RED, RESET)?;
-                        }
-                        if !upgrade.is_empty() {
-                            write!(string, "{}{}upgrade{} ", BOLD, GREEN, RESET)?;
-                        }
-                        if !downgrade.is_empty() {
-                            write!(string, "{}{}{}downgrade{} ", BOLD, UNDERLINED, RED, RESET)?;
-                        }
-                        write!(string, "{}", named.vec_string_inner())?;
-                        if !unnamed.is_empty() {
-                            write!(string, ", {}{}{}", FAINT, unnamed.vec_string_inner(), RESET)?;
-                        }
-                    } else if !singular {
-                        write!(string, "{} - ", format_dt(dt))?;
-                        write!(string, "{}{}Complex{} ", BOLD, MAGENTA, RESET)?;
-                        write!(string, "{}{}{}{}",
-                            GREEN, UNDERLINED, upgrade.vec_string_inner(), RESET)?;
-                        if !upgrade.is_empty() && !downgrade.is_empty() { write!(string, ", ")?; }
-                        write!(string, "{}{}{}{}",
-                            RED, UNDERLINED, downgrade.vec_string_inner(), RESET)?;
-                        if !downgrade.is_empty() && !install.is_empty() { write!(string, ", ")?; }
-                        write!(string, "{}{}{}", GREEN, install.vec_string_inner(), RESET)?;
-                        if !install.is_empty() && !remove.is_empty() { write!(string, ", ")?; }
-                        write!(string, "{}{}{}", RED, remove.vec_string_inner(), RESET)?;
-                        write!(string, ", ")?;
-                        write!(string, "{}{}{}", MAGENTA, command, RESET)?;
+                let mut string = String::new();
+                let mut done_something = false;
+                let (hu, hd, hi, hr) = (
+                    !upgrade.is_empty(), !downgrade.is_empty(),
+                    !install.is_empty(), !remove.is_empty()
+                );
+                if singular && !hu && !named.is_empty() {
+                    write!(string, "{} - ", format_dt(dt))?;
+                    if hi { write!(string, "{}{}install{} ", BOLD, GREEN, RESET)?; }
+                    if hr { write!(string, "{}{}remove{} ", BOLD, RED, RESET)?; }
+                    if hu { write!(string, "{}{}upgrade{} ", BOLD, GREEN, RESET)?; }
+                    if hd { write!(string, "{}{}{}downgrade{} ", BOLD, UNDERLINED, RED, RESET)?; }
+                    write!(string, "{}", named.vec_string_inner())?;
+                    if !unnamed.is_empty() {
+                        write!(string, ", {}{}{}", FAINT, unnamed.vec_string_inner(), RESET)?;
                     }
+                    done_something = true;
+                } else if !singular {
+                    write!(string, "{} - ", format_dt(dt))?;
+                    write!(string, "{}{}complex{} ", BOLD, MAGENTA, RESET)?;
+                    write!(string, "{}{}{}{}",
+                        GREEN, UNDERLINED, upgrade.vec_string_inner(), RESET)?;
+                    if hu && (hd || hi || hr) { write!(string, ", ")?; }
+                    write!(string, "{}{}{}{}",
+                        RED, UNDERLINED, downgrade.vec_string_inner(), RESET)?;
+                    if hd && (hi || hr) { write!(string, ", ")?; }
+                    write!(string, "{}{}{}", GREEN, install.vec_string_inner(), RESET)?;
+                    if hi && hr { write!(string, ", ")?; }
+                    write!(string, "{}{}{}", RED, remove.vec_string_inner(), RESET)?;
+                    write!(string, ", ")?;
+                    write!(string, "{}{}{}", MAGENTA, command, RESET)?;
+                    done_something = true;
+                }
+                if done_something {
                     writeln!(string)?;
                     strings.push(string);
                     n -= 1;
