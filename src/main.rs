@@ -77,6 +77,8 @@ enum Commands{
         full: bool,
         #[clap(short = 'u', help = "Ignore updates in full mode.")]
         no_upgrades: bool,
+        #[clap(short = 'c', help = "Focus on package count.")]
+        count: bool,
     },
     #[clap(
         short_flag = 'I',
@@ -131,10 +133,10 @@ fn main() {
         Commands::Package{ package, upgrade_command } => {
             package_history(parsed, package, upgrade_command);
         },
-        Commands::History{ n, full, no_upgrades } => {
+        Commands::History{ n, full, no_upgrades, count } => {
             if full {
                 history_full(parsed, n, no_upgrades);
-            } else if let Err(e) = history_compact(parsed, n){
+            } else if let Err(e) = history_compact(parsed, n, count){
                 println!("{:?}", e);
             }
         },
@@ -206,7 +208,7 @@ fn summary(events: Events){
         );
     }
 
-    for event in events{
+    for event in events {
         match event{
             Event::Command((y, _, _, _), _) => {
                 last_command_update = false;
@@ -405,7 +407,7 @@ fn history_full(events: Events, n: usize, no_upgrades: bool) {
     }
 }
 
-fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
+fn history_compact(events: Events, mut n: usize, count: bool) -> Result<(), fmt::Error> {
     let mut named = Vec::new();
     let mut unnamed = Vec::new();
     let mut install: Vec<String> = Vec::new();
@@ -413,6 +415,14 @@ fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
     let mut upgrade: Vec<String> = Vec::new();
     let mut downgrade: Vec<String> = Vec::new();
     let mut strings = Vec::new();
+    let mut packages = 0;
+    for event in &events {
+        match event{
+            Event::Installed(_, _, _) => { packages += 1; },
+            Event::Removed(_, _, _) => { packages -= 1; },
+            _ => { }
+        }
+    }
     for event in events.into_iter().rev(){
         match event{
             Event::Command(dt, command) => {
@@ -440,7 +450,30 @@ fn history_compact(events: Events, mut n: usize) -> Result<(), fmt::Error> {
                     !upgrade.is_empty(), !downgrade.is_empty(),
                     !install.is_empty(), !remove.is_empty()
                 );
-                if singular && !hu && !named.is_empty() {
+                if count && (hi || hr || hd) {
+                    write!(string, "{} - ", format_dt(dt))?;
+                    let diff = install.len() as i32 - remove.len() as i32;
+                    // green for negative because removing is good
+                    let (dcol, dchar) = match diff.cmp(&0) {
+                        std::cmp::Ordering::Less => (GREEN, '-'),
+                        std::cmp::Ordering::Equal => (YELLOW, '+'),
+                        std::cmp::Ordering::Greater => (RED, '+'),
+                    };
+                    write!(string, "{BOLD}{dcol}{dchar}{}{RESET} -> {packages} ", diff.abs())?;
+                    packages -= diff;
+                    let (dtype, col) = match (hi, hr, hu | hd) {
+                        (true, false, false) => ("install", GREEN),
+                        (false, true, false) => ("remove", RED),
+                        _ => ("complex", MAGENTA),
+                    };
+                    write!(string, "{col}{BOLD}{dtype}{RESET}")?;
+                    if !named.is_empty() {
+                        write!(string, " {}", named.vec_string_inner())?;
+                    } else {
+                        write!(string, " {MAGENTA}{}{RESET}", command)?;
+                    }
+                    done_something = true;
+                } else if singular && !hu && !named.is_empty() {
                     write!(string, "{} - ", format_dt(dt))?;
                     if hi { write!(string, "{}{}install{} ", BOLD, GREEN, RESET)?; }
                     if hr { write!(string, "{}{}remove{} ", BOLD, RED, RESET)?; }
