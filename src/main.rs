@@ -459,14 +459,18 @@ fn history_compact(events: Events, mut n: usize, count: bool) -> Result<(), fmt:
                         std::cmp::Ordering::Equal => (YELLOW, '+'),
                         std::cmp::Ordering::Greater => (RED, '+'),
                     };
-                    write!(string, "{BOLD}{dcol}{dchar}{}{RESET} -> {packages} ", diff.abs())?;
+                    write!(string,
+                        "{BOLD}{dcol}{:>4}{RESET} -> {:<4} ",
+                        format!("{dchar}{}", diff.abs()), packages
+                    )?;
                     packages -= diff;
-                    let (dtype, col) = match (hi, hr, hu | hd) {
-                        (true, false, false) => ("install", GREEN),
-                        (false, true, false) => ("remove", RED),
-                        _ => ("complex", MAGENTA),
-                    };
-                    write!(string, "{col}{BOLD}{dtype}{RESET}")?;
+                    write!(string, "{BOLD}")?;
+                    match (hi, hr, hu | hd) {
+                        (true, false, false) => write!(string, "{GREEN}install{RESET}"),
+                        (false, true, false) => write!(string, "{RED}remove{RESET} "),
+                        _ => write!(string, "{MAGENTA}complex{RESET}"),
+                    }?;
+                    write!(string, "{RESET}")?;
                     if !named.is_empty() {
                         write!(string, " {}", named.vec_string_inner())?;
                     } else {
@@ -676,7 +680,7 @@ fn print_map<T: Display + PartialEq + Eq + PartialOrd + Hash>(
     };
     for (to_display, freq) in vec.into_iter().take(n){
         println!(
-            "\t{}{}{}{}: {}{}{} times ({}{:.2}%{})",
+            "\t{}{}{: >2}{}: {}{}{} times ({}{:.2}%{})",
             BOLD, GREEN, to_display, RESET, RED, freq, RESET, YELLOW,
             freq as f32 / total as f32 * 100.0, RESET,
         );
